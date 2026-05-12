@@ -7,13 +7,13 @@ async function run() {
 
   try {
     const model = ai.getGenerativeModel({ 
-      model: "gemini-2.0-flash",
+      model: "gemini-flash-latest",
       generationConfig: { responseMimeType: "application/json" }
     });
     const response = await model.generateContent(prompt);
-    console.log("Success with gemini-2.0-flash");
+    console.log("Success with gemini-flash-latest:", response.response.text());
   } catch (error) {
-    console.error("Error with gemini-2.0-flash:", error.message);
+    console.error("Error with gemini-flash-latest:", error.message);
   }
 }
 run();

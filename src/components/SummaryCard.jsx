@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { PlayCircle, Calendar, X } from 'lucide-react';
 
-export default function SummaryCard({ video, summary, status, onSummarize }) {
+export default function SummaryCard({ video, summaryData, onSummarize }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { status = 'loading', shortSummary, longSummary } = summaryData;
 
   const formattedDate = video.publishedAt 
     ? new Date(video.publishedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : 'Unknown Date';
 
   const handleCardClick = () => {
-    if (status === 'success' && summary?.longSummary) {
+    if (status === 'success_long' && longSummary) {
       setIsModalOpen(true);
     }
   };
@@ -17,7 +18,7 @@ export default function SummaryCard({ video, summary, status, onSummarize }) {
   return (
     <>
       <div 
-        className={`bento-card ${status === 'success' ? 'clickable' : ''}`} 
+        className={`bento-card ${status === 'success_long' ? 'clickable' : ''}`} 
         onClick={handleCardClick}
       >
         <div className="card-header">
@@ -43,31 +44,39 @@ export default function SummaryCard({ video, summary, status, onSummarize }) {
             <div>
               <div className="skeleton skeleton-text"></div>
               <div className="skeleton skeleton-text"></div>
-              <div className="skeleton skeleton-text"></div>
             </div>
           ) : status === 'error' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-start' }}>
-              <span style={{ color: 'var(--yt-red)' }}>Failed to load summary.</span>
+            <span style={{ color: 'var(--yt-red)' }}>Failed to load short summary.</span>
+          ) : (
+            <div style={{ paddingBottom: '0.5rem' }}>{shortSummary}</div>
+          )}
+
+          {/* Action buttons area */}
+          <div style={{ marginTop: '0.5rem' }}>
+            {status === 'loading_long' ? (
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Generating full summary...</span>
+            ) : status === 'error_long' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-start' }}>
+                <span style={{ color: 'var(--yt-red)', fontSize: '0.85rem' }}>Failed to generate full summary.</span>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onSummarize(); }} 
+                  className="submit-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                >
+                  Retry Full Summary
+                </button>
+              </div>
+            ) : status === 'idle' ? (
               <button 
                 onClick={(e) => { e.stopPropagation(); onSummarize(); }} 
-                className="submit-btn" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+                className="submit-btn" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
               >
-                Retry
+                Generate Full Summary
               </button>
-            </div>
-          ) : status === 'idle' ? (
-            <button 
-              onClick={(e) => { e.stopPropagation(); onSummarize(); }} 
-              className="submit-btn" style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem', marginTop: '0.5rem' }}
-            >
-              Generate Summary
-            </button>
-          ) : (
-            summary?.shortSummary || "Summary will appear here..."
-          )}
+            ) : null}
+          </div>
         </div>
         
-        {status === 'success' && summary?.longSummary && (
+        {status === 'success_long' && longSummary && (
           <div className="read-more-hint">Click to read full summary</div>
         )}
       </div>
@@ -91,10 +100,10 @@ export default function SummaryCard({ video, summary, status, onSummarize }) {
             </div>
             <div className="modal-body">
               <div className="short-summary-highlight">
-                <strong>TL;DR:</strong> {summary.shortSummary}
+                <strong>TL;DR:</strong> {shortSummary}
               </div>
               <div className="long-summary-text">
-                {summary.longSummary.split('\n').map((paragraph, idx) => (
+                {longSummary.split('\n').map((paragraph, idx) => (
                   <p key={idx}>{paragraph}</p>
                 ))}
               </div>

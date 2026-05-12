@@ -109,8 +109,20 @@ h1 span {
 /* Bento Grid */
 .bento-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
+}
+
+@media (max-width: 1100px) {
+  .bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .bento-card {
@@ -329,39 +341,27 @@ h1 span {
   margin-bottom: 0;
 }
 
-/* Input Area */
-.input-section {
-  max-width: 600px;
-  margin: 0 auto;
-  position: relative;
+/* Dashboard */
+.dashboard {
+  animation: fadeIn 0.3s ease;
 }
 
-.input-wrapper {
-  display: flex;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 0.5rem;
-  transition: all 0.3s ease;
-}
-
-.input-wrapper:focus-within {
-  border-color: var(--yt-red);
-  box-shadow: 0 0 0 3px var(--yt-red-dim);
-}
-
-.url-input {
-  flex: 1;
+.back-btn {
   background: transparent;
+  color: var(--text-secondary);
   border: none;
-  color: var(--text-primary);
-  padding: 0.75rem 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1rem;
-  outline: none;
+  padding: 0.5rem 0;
+  transition: color 0.2s;
+  margin-bottom: 1rem;
 }
 
-.url-input::placeholder {
-  color: var(--text-tertiary);
+.back-btn:hover {
+  color: var(--text-primary);
 }
 
 .submit-btn {
