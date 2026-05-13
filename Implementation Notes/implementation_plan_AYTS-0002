@@ -1,0 +1,39 @@
+# AutoYTSummarizer v3: UX Polish & Pagination Architecture
+
+## User Review Required
+> [!IMPORTANT]
+> Please review the proposed solutions below, specifically the discussion regarding pagination and its impact on the API. Let me know your preference so I can proceed with the code changes.
+
+---
+
+## 1. Prevent Background Scrolling
+**Problem:** The main page scrolls while the full summary modal is open.
+**Solution:** I will add a `useEffect` hook inside the `SummaryCard` component. Whenever `isModalOpen` is set to true, it will apply `document.body.style.overflow = 'hidden'`, locking the background. When the modal is closed, it will restore the default scrolling behavior.
+
+---
+
+## 2. Inefficient Workflow (Auto-open Modal)
+**Problem:** Generating the full summary currently requires two clicks: one to generate, and another to open the card once it finishes.
+**Solution:** I will track the generation status inside the `SummaryCard`. The moment the Gemini API successfully returns the long summary (transitioning from `loading_long` to `success_long`), the card will automatically trigger `setIsModalOpen(true)`, instantly popping up the modal for a seamless reading experience.
+
+---
+
+## 3. Infinite Scrolling vs. Page-Wise Pagination (Discussion)
+
+Currently, the backend attempts to fetch **ALL** videos in a playlist at once using a `do...while` loop. If a playlist has 200 videos, it fetches all 200 from YouTube, and then tries to send all 200 to Gemini for the batch short-summary generation.
+
+### The Problem with the Current Approach
+*   **Latency:** Fetching transcripts for 200 videos takes a massive amount of time, resulting in a very long loading screen.
+*   **Token Limits:** Sending 200 transcripts to Gemini in one massive prompt might exceed even the 1-million token limit or cause the Firebase Function to time out (500s limit).
+
+### The Proposed "Page-Wise" Architecture
+I propose we implement **Standard Pagination** (e.g., 24 videos per page) with "Next Page" / "Previous Page" buttons at the bottom of the grid. 
+
+**Impact on API Calls (Highly Beneficial):**
+1.  **YouTube API:** We will only fetch 24 videos at a time, making the initial load near-instantaneous.
+2.  **Gemini Batch API:** We will only fetch 24 transcripts and send a much smaller batch to Gemini. This drastically reduces the token payload, resulting in much faster short-summary generations and completely eliminating timeout risks.
+3.  **Cost/Limits:** You still only use **1 API Request** to Gemini per page view, so clicking "Next Page" will consume 1 request from your daily quota to batch-summarize the next 24 videos.
+
+### Open Questions for You:
+1. Do you agree with moving to a "Page-Wise" architecture with Next/Previous buttons?
+2. How many videos would you like to display per page? (I recommend 12, 18, or 24 to maintain the 3-column grid structure perfectly).

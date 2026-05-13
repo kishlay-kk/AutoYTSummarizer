@@ -1,0 +1,31 @@
+# AutoYTSummarizer v3.1: Global Sorting & Visual Polish
+
+## User Review Required
+> [!IMPORTANT]
+> Please review my analysis of the two bugs you found and the proposed solutions. Let me know if you approve so I can begin execution.
+
+---
+
+## 1. Global Sorting Issue
+
+**The Problem:** Currently, we are asking the YouTube API for "Page 1" (the first 18 videos in the playlist) and then sorting *only those 18 videos*. This means if the absolute newest videos in the playlist are on "Page 3", they won't show up on Page 1, defeating the purpose of the sorting dropdown.
+
+**The Solution:** 
+We must separate the "Video Fetching" from the "AI Summarizing".
+1.  **Backend:** I will update the backend to fetch **ALL** the videos in a playlist very quickly (this is extremely cheap and fast on the YouTube API and doesn't use AI limits).
+2.  **Frontend:** The frontend will take this complete list (e.g., 200 videos), apply your global sorting (Newest First), and *then* split them into local pages of 18 videos.
+3.  **AI Batching:** Crucially, we will still only send the **current page of 18 videos** to Gemini for the short summaries. This keeps our AI token usage tiny and avoids any rate limits or timeouts, while giving you perfect global sorting!
+
+---
+
+## 2. "Empty Tile" Issue while Scrolling
+
+**The Problem:** When you scroll down, you are seeing a dark, empty box at the top of a card for a few seconds before the content pops in. This is caused by the YouTube video **thumbnail image** downloading over your network! Because the image container's background is dark (`#222`), it looks completely empty or broken until the image finishes downloading.
+
+**The Solution:** 
+I will add an `onLoad` tracker to the images inside the `SummaryCard`. Until the browser finishes downloading the thumbnail, it will display a beautiful, animated "skeleton shimmer" (the same animation used for the loading text). This provides immediate visual feedback that an image is loading, eliminating the "empty tile" glitch.
+
+## Verification Plan
+- Verify that sorting "Newest First" accurately pulls the newest videos from the *entire* playlist to Page 1.
+- Verify that navigating pages only triggers AI summarization for the visible 18 videos.
+- Verify the skeleton shimmer appears in the thumbnail space until the image is fully loaded.

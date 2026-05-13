@@ -10,11 +10,17 @@ export default function App() {
   const [isFetchingPlaylists, setIsFetchingPlaylists] = useState(true);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   
-  const [playlistVideos, setPlaylistVideos] = useState([]);
+  const [allPlaylistVideos, setAllPlaylistVideos] = useState([]);
+  const [playlistVideos, setPlaylistVideos] = useState([]); // Currently visible slice
   const [isFetchingPlaylistVideos, setIsFetchingPlaylistVideos] = useState(false);
-  const [summaries, setSummaries] = useState({}); // { videoId: { shortSummary: '', status: 'success', longSummary: null } }
+  const [isBatchingSummaries, setIsBatchingSummaries] = useState(false);
+  const [summaries, setSummaries] = useState({});
   const [error, setError] = useState(null);
   const [sortOrder, setSortOrder] = useState('newest');
+  
+  // Pagination state
+  const ITEMS_PER_PAGE = 18;
+  const [currentPage, setCurrentPage] = useState(1);
 
   const getChannelPlaylists = httpsCallable(functions, 'getChannelPlaylists');
   const getPlaylistVideos = httpsCallable(functions, 'getPlaylistVideos');
@@ -36,34 +42,71 @@ export default function App() {
     fetchPlaylists();
   }, []);
 
-  const handleSelectPlaylist = async (playlist) => {
-    setSelectedPlaylist(playlist);
+  const fetchAllVideos = async (playlist) => {
+    setAllPlaylistVideos([]);
     setPlaylistVideos([]);
     setSummaries({});
     setError(null);
+    setCurrentPage(1);
     setIsFetchingPlaylistVideos(true);
 
     try {
-      const res = await getPlaylistVideos({ playlistUrl: `https://www.youtube.com/playlist?list=${playlist.playlistId}` });
-      const videos = res.data.videos || [];
-      setPlaylistVideos(videos);
+      const res = await getPlaylistVideos({ 
+        playlistUrl: `https://www.youtube.com/playlist?list=${playlist.playlistId}`
+      });
       
+      const videos = res.data.videos || [];
+      setAllPlaylistVideos(videos);
+      setIsFetchingPlaylistVideos(false);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to process playlist.");
+      setIsFetchingPlaylistVideos(false);
+    }
+  };
+
+  const handleSelectPlaylist = (playlist) => {
+    setSelectedPlaylist(playlist);
+    fetchAllVideos(playlist);
+  };
+
+  const sortedAllVideos = useMemo(() => {
+    return [...allPlaylistVideos].sort((a, b) => {
+      const dateA = new Date(a.publishedAt || 0).getTime();
+      const dateB = new Date(b.publishedAt || 0).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+  }, [allPlaylistVideos, sortOrder]);
+
+  const totalPages = Math.ceil(sortedAllVideos.length / ITEMS_PER_PAGE);
+
+  useEffect(() => {
+    if (sortedAllVideos.length === 0) return;
+
+    const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIdx = startIdx + ITEMS_PER_PAGE;
+    const visibleSlice = sortedAllVideos.slice(startIdx, endIdx);
+    
+    setPlaylistVideos(visibleSlice);
+
+    // Check if we need to fetch batch summaries for this slice
+    const unsummarized = visibleSlice.filter(v => !summaries[v.videoId]);
+    
+    if (unsummarized.length > 0) {
       const initialSummaries = {};
-      videos.forEach(v => {
+      unsummarized.forEach(v => {
         initialSummaries[v.videoId] = { status: 'loading', shortSummary: null, longSummary: null };
       });
-      setSummaries(initialSummaries);
-      setIsFetchingPlaylistVideos(false);
+      
+      setSummaries(prev => ({ ...prev, ...initialSummaries }));
+      setIsBatchingSummaries(true);
 
-      if (videos.length > 0) {
-        // Fetch short summaries in batch
-        try {
-          const batchRes = await batchShortSummaries({ videos: videos.map(v => ({ videoId: v.videoId, title: v.title })) });
+      batchShortSummaries({ videos: unsummarized.map(v => ({ videoId: v.videoId, title: v.title })) })
+        .then(batchRes => {
           const shortMap = batchRes.data || {};
-          
           setSummaries(prev => {
             const next = { ...prev };
-            videos.forEach(v => {
+            unsummarized.forEach(v => {
               if (shortMap[v.videoId]) {
                 next[v.videoId] = { ...next[v.videoId], status: 'idle', shortSummary: shortMap[v.videoId] };
               } else {
@@ -72,20 +115,27 @@ export default function App() {
             });
             return next;
           });
-        } catch (batchErr) {
+        })
+        .catch(batchErr => {
           console.error("Batch summary failed:", batchErr);
           setSummaries(prev => {
              const next = { ...prev };
-             videos.forEach(v => { next[v.videoId] = { ...next[v.videoId], status: 'error' }; });
+             unsummarized.forEach(v => { next[v.videoId] = { ...next[v.videoId], status: 'error' }; });
              return next;
           });
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      setError(err.message || "Failed to process playlist.");
-      setIsFetchingPlaylistVideos(false);
+        })
+        .finally(() => {
+          setIsBatchingSummaries(false);
+        });
     }
+  }, [sortedAllVideos, currentPage]);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(p => p + 1);
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) setCurrentPage(p => p - 1);
   };
 
   const handleSummarizeVideo = async (video) => {
@@ -115,13 +165,7 @@ export default function App() {
     }
   };
 
-  const sortedVideos = useMemo(() => {
-    return [...playlistVideos].sort((a, b) => {
-      const dateA = new Date(a.publishedAt || 0).getTime();
-      const dateB = new Date(b.publishedAt || 0).getTime();
-      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
-    });
-  }, [playlistVideos, sortOrder]);
+
 
   return (
     <div className="app-container">
@@ -178,7 +222,7 @@ export default function App() {
             {playlistVideos.length > 0 && (
               <div className="results-container">
                 <div className="controls-bar">
-                  <span className="results-count">{playlistVideos.length} videos</span>
+                  <span className="results-count">Total: {sortedAllVideos.length} videos (Page {currentPage} of {totalPages})</span>
                   <div className="sort-control">
                     <label htmlFor="sort">Sort by:</label>
                     <select id="sort" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
@@ -189,7 +233,7 @@ export default function App() {
                 </div>
                 
                 <div className="bento-grid">
-                  {sortedVideos.map((video) => (
+                  {playlistVideos.map((video) => (
                     <SummaryCard 
                       key={video.videoId} 
                       video={video} 
@@ -197,6 +241,24 @@ export default function App() {
                       onSummarize={() => handleSummarizeVideo(video)}
                     />
                   ))}
+                </div>
+                
+                <div className="pagination-controls">
+                  <button 
+                    className="submit-btn" 
+                    onClick={handlePrevPage} 
+                    disabled={currentPage === 1 || isBatchingSummaries}
+                  >
+                    Previous
+                  </button>
+                  <span className="page-indicator">Page {currentPage} of {totalPages}</span>
+                  <button 
+                    className="submit-btn" 
+                    onClick={handleNextPage} 
+                    disabled={currentPage === totalPages || isBatchingSummaries}
+                  >
+                    Next
+                  </button>
                 </div>
               </div>
             )}

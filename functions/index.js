@@ -64,32 +64,43 @@ exports.getPlaylistVideos = onCall({ cors: true }, async (request) => {
     }
 
     const playlistId = extractPlaylistId(playlistUrl);
+
     let videos = [];
     let nextPageToken = "";
+    
+    // Safety limit to prevent absolute infinite loops on huge playlists (e.g. max 500 items)
+    let pagesFetched = 0;
 
     do {
       const res = await youtube.playlistItems.list({
         part: ["snippet"],
         playlistId: playlistId,
         maxResults: 50,
-        pageToken: nextPageToken,
+        pageToken: nextPageToken || undefined,
       });
 
       const items = res.data.items || [];
-      videos = videos.concat(
-        items.map((item) => ({
-          videoId: item.snippet.resourceId.videoId,
-          title: item.snippet.title,
-          thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
-          publishedAt: item.snippet.publishedAt,
-        }))
-      );
+      videos = videos.concat(items.map((item) => ({
+        videoId: item.snippet.resourceId.videoId,
+        title: item.snippet.title,
+        thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
+        publishedAt: item.snippet.publishedAt,
+      })));
 
       nextPageToken = res.data.nextPageToken;
-    } while (nextPageToken);
+      pagesFetched++;
+    } while (nextPageToken && pagesFetched < 10); // Max ~500 videos
 
     // Filter out private/deleted videos that might not have a title or have 'Private video' as title
     videos = videos.filter((v) => v.title && v.title !== "Private video" && v.title !== "Deleted video");
+
+    // Deduplicate by videoId to prevent React key rendering bugs on the frontend
+    const seen = new Set();
+    videos = videos.filter(v => {
+      if (seen.has(v.videoId)) return false;
+      seen.add(v.videoId);
+      return true;
+    });
 
     return { videos };
   } catch (error) {

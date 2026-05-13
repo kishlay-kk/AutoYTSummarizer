@@ -42,3 +42,29 @@ AutoYTSummarizer utilizes a modern serverless architecture. The frontend is a Si
 *   **API Security**: `YOUTUBE_API_KEY` and `GEMINI_API_KEY` are stored safely in backend environment variables (`functions/.env`).
 *   **Rate Limiting Mitigation**: To prevent exhausting the Gemini API free-tier limits (e.g., 20 requests/day), the application relies on manual, on-demand summary generation rather than aggressive batch processing.
 *   **Graceful Degradation**: If transcripts are disabled by the video owner, the system seamlessly falls back to summarizing based on the video title.
+
+---
+
+## 6. Updates: AYTS-0002 (Architecture Refinements)
+
+### 6.1. Backend Updates (`functions/index.js`)
+*   **`getChannelPlaylists`**: Added to fetch playlists dynamically using `YOUTUBE_CHANNEL_ID`.
+*   **`batchShortSummaries`**: Added a new function that takes an array of video IDs, securely fetches their transcripts, limits the transcript text to 250 words per video, and queries Gemini with a 1M token context window to generate a JSON map of `shortSummary` items in a single API call.
+*   **`getPlaylistVideos`**: Refactored to drop the `do...while` infinite fetch. It now strictly respects `maxResults` (default 18) and returns Google API pagination tokens (`nextPageToken`, `prevPageToken`) directly to the client.
+
+### 6.2. Frontend Updates (`src/App.jsx` & Components)
+*   **Pagination State**: Added `nextPageToken`, `prevPageToken`, and `currentPage` states. "Next" and "Previous" button `onClick` handlers pass these tokens back to the `getPlaylistVideos` function to load precise data chunks.
+*   **Modal Event Hooks**: `SummaryCard.jsx` utilizes `useEffect` hooks tracking `status` ref-transitions to programmatically flip `isModalOpen` to true when a long summary promise resolves. Added a side-effect hook on `document.body` to manipulate overflow properties.
+
+---
+
+## 7. Updates: AYTS-0003 (Global Sorting & Rendering Optimization)
+
+### 7.1. Backend Updates (`functions/index.js`)
+*   **Deduplication Layer**: `getPlaylistVideos` now employs a `Set` to filter out videos with duplicate `videoId` strings, guaranteeing 100% unique React keys for the frontend rendering engine.
+*   **Data Fetching**: Restored the `do...while` loop in `getPlaylistVideos` to fetch the entire playlist content (safeguarded at ~500 items max) rather than paginating at the API level, enabling global client-side sorting.
+
+### 7.2. Frontend Updates (`src/App.jsx` & Components)
+*   **Array Slicing Architecture**: `App.jsx` now stores `allPlaylistVideos` in state, sorts it globally via a `useMemo` hook, and mathematically slices the sorted array into 18-item chunks based on `currentPage`. The `batchShortSummaries` function fires dynamically using a `useEffect` hook whenever a new, unsummarized chunk is rendered.
+*   **Image Loading State**: `SummaryCard.jsx` now tracks an `imageLoaded` boolean, rendering a CSS-based absolute-positioned skeleton loader that gracefully fades out (`opacity` transition) upon the native `onLoad` image event.
+*   **CSS GPU Acceleration**: Stripped `backdrop-filter` from `.bento-card` and added `transform: translateZ(0)` to force the browser to elevate the cards to dedicated GPU compositor layers. This resolves a known Chromium bug where scrolling repaints drop blurred layers from the view tree.

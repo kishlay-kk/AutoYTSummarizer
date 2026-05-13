@@ -1,9 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PlayCircle, Calendar, X } from 'lucide-react';
 
 export default function SummaryCard({ video, summaryData, onSummarize }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const { status = 'loading', shortSummary, longSummary } = summaryData;
+  const prevStatusRef = useRef(status);
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isModalOpen]);
+
+  // Auto-open modal when long summary finishes loading
+  useEffect(() => {
+    if (prevStatusRef.current === 'loading_long' && status === 'success_long' && longSummary) {
+      setIsModalOpen(true);
+    }
+    prevStatusRef.current = status;
+  }, [status, longSummary]);
 
   const formattedDate = video.publishedAt 
     ? new Date(video.publishedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
@@ -22,9 +44,17 @@ export default function SummaryCard({ video, summaryData, onSummarize }) {
         onClick={handleCardClick}
       >
         <div className="card-header">
-          <div className="thumbnail-container">
+          <div className="thumbnail-container" style={{ position: 'relative' }}>
+            {!imageLoaded && video.thumbnail && (
+              <div className="skeleton" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', margin: 0, borderRadius: 0 }}></div>
+            )}
             {video.thumbnail ? (
-              <img src={video.thumbnail} alt={video.title} />
+              <img 
+                src={video.thumbnail} 
+                alt={video.title} 
+                onLoad={() => setImageLoaded(true)}
+                style={{ opacity: imageLoaded ? 1 : 0, transition: 'opacity 0.3s ease' }}
+              />
             ) : (
               <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#222' }}>
                 <PlayCircle color="var(--yt-red)" />
